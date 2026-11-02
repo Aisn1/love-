@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Love Heart</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #060208;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            font-family: Arial, sans-serif;
+        }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const SC = 21;
+        const OY = 20;
+        const DURATION = 10;
+        const TICK = 16;
+        const ANIM = 42;
+        const LIFT = 34;
+        const GAP = 7;
+        const SIZES = [9, 10, 11, 12];
+        const FONT = "Arial";
+        const BG = "#060208";
+        const BGC = [6/255, 2/255, 8/255];
+        const FLASH = [1.0, 0.78, 0.78];
+
+        const PHRASES = [
+            "I love you", "Seni seviyorum", "Te amo", "Je t'aime",
+            "Ich liebe dich", "Ti amo", "Eu te amo", "Я тебя люблю",
+            "사랑해", "愛してる", "我爱你", "मैं तुमसे प्यार करता हूँ",
+            "Σ' αγαπώ", "Ik hou van jou", "Jag älskar dig", "Kocham cię",
+            "ฉันรักเธอ", "Anh yêu em", "Aku cinta kamu", "Я тебе кохаю"
+        ];
+
+        class Random {
+            constructor(seed) { this.m = 0x80000000; this.a = 1103515245; this.c = 12345; this.state = seed; }
+            nextFloat() { this.state = (this.a * this.state + this.c) % this.m; return this.state / (this.m - 1); }
+            uniform(min, max) { return min + (max - min) * this.nextFloat(); }
+            choice(array) { return array[Math.floor(this.nextFloat() * array.length)]; }
+            shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(this.nextFloat() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+        }
+
+        const rng = new Random(11);
+
+        function resize() {
+            canvas.width = 800;
+            canvas.height = 800;
+        }
+        resize();
+
+        function heart(a) {
+            const x = 16 * Math.pow(Math.sin(a), 3);
+            const y = 13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a);
+            return [x * SC, y * SC + OY];
+        }
+
+        function hx(c) {
+            const r = Math.floor(Math.max(0, Math.min(1, c[0])) * 255);
+            const g = Math.floor(Math.max(0, Math.min(1, c[1])) * 255);
+            const b = Math.floor(Math.max(0, Math.min(1, c[2])) * 255);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function mix(a, b, k) {
+            return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+        }
+
+        function dim(c, k) {
+            return [c[0] * k, c[1] * k, c[2] * k];
+        }
+
+        const POLY = [];
+        for (let i = 0; i < 720; i++) POLY.push(heart(2 * Math.PI * i / 720));
+
+        const EDGES = [];
+        for (let i = 0; i < POLY.length; i++) {
+            EDGES.push([POLY[i], POLY[(i + 1) % POLY.length]]);
+        }
+
+        const YMAX = Math.max(...POLY.map(p => p[1]));
+        const YMIN = Math.min(...POLY.map(p => p[1]));
+        const CY = (YMAX + YMIN) / 2;
+
+        function spans(y) {
+            const xs = [];
+            for (let [[x1, y1], [x2, y2]] of EDGES) {
+                if ((y1 <= y && y < y2) || (y2 <= y && y < y1)) {
+                    xs.push(x1 + (y - y1) * (x2 - x1) / (y2 - y1));
+                }
+            }
+            xs.sort((a, b) => a - b);
+            const result = [];
+            for (let i = 0; i < xs.length; i += 2) {
+                if (xs[i + 1] !== undefined) result.push([xs[i], xs[i + 1]]);
+            }
+            return result;
+        }
+
+        function intersect(A, B) {
+            const out = [];
+            for (let a of A) {
+                for (let b of B) {
+                    const lo = Math.max(a[0], b[0]);
+                    const hi = Math.min(a[1], b[1]);
+                    if (hi - lo > 14) out.push([lo, hi]);
+                }
+            }
+            return out;
+        }
+
+        function* phraseCycle() {
+            while (true) {
+                const order = [...PHRASES];
+                rng.shuffle(order);
+                for (let phrase of order) yield phrase;
+            }
+        }
+
+        function getTextWidth(text
